@@ -1,0 +1,7 @@
+name = "Strudel"
+uuid = "932adbb0-91d4-4af7-8e1a-09270b47ecba"
+authors = ["Nicholas Stone <stone.nicholas@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+Recluse = "d7e13037-544e-446f-97a1-240955fde5ba"
