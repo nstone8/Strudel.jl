@@ -1,6 +1,6 @@
 name = "Strudel"
 uuid = "932adbb0-91d4-4af7-8e1a-09270b47ecba"
-authors = ["Nicholas Stone <stone.nicholas@gmail.com>"]
+authors = ["Nicholas Stone <nicholasestone@proton.me>"]
 version = "0.1.0"
 
 [deps]
