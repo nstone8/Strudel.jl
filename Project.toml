@@ -1,7 +1,7 @@
 name = "Strudel"
 uuid = "932adbb0-91d4-4af7-8e1a-09270b47ecba"
 authors = ["Nicholas Stone <nicholasestone@proton.me>"]
-version = "0.1.1"
+version = "0.1.2"
 
 [deps]
 Recluse = "d7e13037-544e-446f-97a1-240955fde5ba"

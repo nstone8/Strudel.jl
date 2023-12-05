@@ -122,20 +122,23 @@ function scaffoldjob(;calibratedfield,
 
     #set up a buffer to store our gwl code
     gwlbuf = IOBuffer()
+    bumperoffset = (scafw-postside)/2
     header = join([
-    "PowerScaling 1.0",
-    "var \$solidLaserPower = $laserpower",
-    "var \$solidScanSpeed = $scanspeed",
-    "var \$baseLaserPower = \$solidLaserPower",
-    "var \$baseScanSpeed = \$solidScanSpeed/2",
-    "var \$interfacePos = $interfacepos",
-    "GlobalGoToY 1950",
-    "$backlashstr",
-    "include $bumperfile",
-    "GlobalGoToX 0",
-    "GlobalGoToY -1950",
-    "$backlashstr",
-    "include $bumperfile"],"\n")
+        "PowerScaling 1.0",
+        "var \$solidLaserPower = $laserpower",
+        "var \$solidScanSpeed = $scanspeed",
+        "var \$baseLqaserPower = \$solidLaserPower",
+        "var \$baseScanSpeed = \$solidScanSpeed/2",
+        "var \$interfacePos = $interfacepos",
+        "GlobalGoToY $bumperoffset",
+        "$backlashstr",
+        "include $bumperfile",
+        "GlobalGoToX 0",
+        "GlobalGoToY $(-1*bumperoffset)",
+        "$backlashstr",
+        "include $bumperfile",
+        "AddZDrivePosition $(-1*postheight)"
+    ],"\n")
     println(gwlbuf,header) #pop our header into our buffer
     mkdir(kerneldir)
     #need to copy the post kernel (and files directory) into kerneldir so the kernel files can see it
@@ -240,7 +243,7 @@ function scaffoldjob(;calibratedfield,
 	    #undo the offset before we write all of our bridges, etc.
 	    println(kio,"XOffset 0")
 	    println(kio,"YOffset 0")
-	    println(kio,"ZOffset $(-postheight)")
+	    println(kio,"AddZDrivePosition $(-1*postheight)")
 	    #write the posts
 	    #all posts get bridges going up and to the left, except for posts along the left edge
 	    #we will record all the hammocks that we need as we build the bridges and write them
