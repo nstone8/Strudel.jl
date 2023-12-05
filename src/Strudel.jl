@@ -265,7 +265,7 @@ function scaffoldjob(;calibratedfield,
 			savegwl(kio,b)
 		    end
 		    #this pair of bridges gets a hammock
-		    hamlength=sum(abs.(bridgeoffsets))-beamwidth+overlap
+		    hamlength=sum(abs.(bridgeoffsets))-beamwidth+2*overlap
 		    push!(hams,Hammock(hamlength,
 				       bridgelengthx,hammockz,ceil(Int,hamlength/dhammockhatch),
 				       rotation=pi/2,center=[bridgecenterx,postcenter[2]]))
@@ -280,7 +280,7 @@ function scaffoldjob(;calibratedfield,
 		    savegwl(kio,b)
 		end
 		#this pair of bridges gets a hammock
-		hamwidth=sum(abs.(bridgeoffsets))-beamwidth+overlap
+		hamwidth=sum(abs.(bridgeoffsets))-beamwidth+2*overlap
 		push!(hams,Hammock(bridgelengthy,
 				   hamwidth,hammockz,ceil(Int,bridgelengthy/dhammockhatch),
 				   rotation=pi/2,center=[postcenter[1],bridgecentery]))
@@ -305,7 +305,7 @@ function scaffoldjob(;calibratedfield,
 			savegwl(kio,b)
 		    end
 		    #this pair of bridges gets a hammock
-		    hamwidth=sum(abs.(bridgeoffsets))-beamwidth+overlap
+		    hamwidth=sum(abs.(bridgeoffsets))-beamwidth+2*overlap
 		    push!(hams,Hammock(bridgelengthy,
 				       hamwidth,hammockz,ceil(Int,bridgelengthy/dhammockhatch),
 				       rotation=pi/2,center=[postcenter[1],bridgecentery]))
