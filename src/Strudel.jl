@@ -1,7 +1,7 @@
 module Strudel
 using Recluse
 
-export writeconfig, scaffoldjob
+export writeconfig, scaffoldjob, scaffold
 
 """
 ```julia
@@ -12,6 +12,9 @@ to `filename` or `"config.jl"` if `filename is omitted.
 """
 function writeconfig(filename="config.jl")
     configdict = Dict(
+        :arraycenter => [0,0],
+        :arraysize => [1,1],
+        :arraypitch => [0,0],
         :calibratedfield => 1750,
         :laserpower => 100,
         :scanspeed => 100000,
@@ -48,22 +51,21 @@ end
 
 """
 ```julia
-scaffoldjob(kwargs...)
-scaffoldjob("configfile.jl")
+scaffold(buffer[,centerposition],kwargs...)
 ```
 
 Generate the files required to print a scaffold with geometry
-defined by the provided `kwargs` or config file. All distances
-should be provided in microns.
+defined by the provided `kwargs`. Append the top level job script
+to the provided `buffer` (basic header entries should be added by
+`scaffoldjob`). The scaffold will be centered on `centerposition`
+which is `[0,0]` if not specified. All distances should be provided
+in microns.
 
 # Arguments
-- outputfile: where to save the job script
 - bumperfile: .gwl file which will write the bumpers centered on `(0,0)`
 - postkernelfile: .gwl file which will write one 'kernel' of posts, centered on `(0,0)`
 - kerneldir: folder to create and fill with reusable units of the design
 - calibratedfield: The diameter of the area which can be printed on without moving the stage
-- laserpower: laser power
-- scanspeed: scan speed for solid objects
 - threadspeed: scan speed for mesh
 - interfacepos: how deep to start printing into the substrate
 - scafl: scaffold length
@@ -83,31 +85,28 @@ should be provided in microns.
 - postheight: post height
 - backlashamount distance to move during backlash correction 
 """
-function scaffoldjob(;calibratedfield,
-                     laserpower,
-                     scanspeed,
-                     interfacepos,
-                     scafl,
-                     scafw,
-                     maxbeamlength,
-                     beamheight,
-                     beamwidth,
-                     beambottomz,
-                     overlapangle,
-                     overlap,
-                     threadspeed,
-                     segmentlength,
-                     gap,
-                     dhatch,
-                     dslice,
-                     dhammockhatch,
-                     postside,
-                     postheight,
-                     bumperfile,
-                     postkernelfile,
-                     kerneldir,
-                     outputfile,
-                     backlashamount)
+function scaffold(gwlbuf,centerposition=[0,0];calibratedfield,
+                  interfacepos,
+                  scafl,
+                  scafw,
+                  maxbeamlength,
+                  beamheight,
+                  beamwidth,
+                  beambottomz,
+                  overlapangle,
+                  overlap,
+                  threadspeed,
+                  segmentlength,
+                  gap,
+                  dhatch,
+                  dslice,
+                  dhammockhatch,
+                  postside,
+                  postheight,
+                  bumperfile,
+                  postkernelfile,
+                  kerneldir,
+                  backlashamount)
     
     hammockz = (beambottomz + beamheight/2)
     chamfer = [-overlapangle -overlapangle
@@ -120,35 +119,26 @@ function scaffoldjob(;calibratedfield,
         "MoveStageY $(-backlashamount)"],"\n","\n")
     backlash(io) = println(io,backlashstr)
 
-    #set up a buffer to store our gwl code
-    gwlbuf = IOBuffer()
     bumperoffset = (scafw-postside)/2
     header = join([
-        "PowerScaling 1.0",
-        "var \$solidLaserPower = $laserpower",
-        "var \$solidScanSpeed = $scanspeed",
-        "var \$baseLaserPower = \$solidLaserPower",
-        "var \$baseScanSpeed = \$solidScanSpeed/2",
-        #"var \$interfacePos = $interfacepos",
-        "GlobalGoToX 0",
-        "GlobalGoToY 0",
+        "GlobalGoToX $(centerposition[1])",
+        "GlobalGoToY $(centerposition[2])",
         backlashstr,
         "FindInterfaceAt $interfacepos",
-        "GlobalGoToY $bumperoffset",
+        "GlobalGoToX $(centerposition[1])",
+        "GlobalGoToY $(centerposition[2]+bumperoffset)",
         backlashstr,
         "include $bumperfile",
         "AddZDrivePosition $(-1*postheight)",
-        "GlobalGoToX 0",
-        "GlobalGoToY $(-1*bumperoffset)",
-        "$backlashstr",
+        "GlobalGoToX $(centerposition[1])",
+        "GlobalGoToY $(centerposition[2]-bumperoffset)",
+        backlashstr,
         "include $bumperfile",
         "AddZDrivePosition $(-1*postheight)"
     ],"\n")
+    
     println(gwlbuf,header) #pop our header into our buffer
-    mkdir(kerneldir)
-    #need to copy the post kernel (and files directory) into kerneldir so the kernel files can see it
-    #cp(postkernelfile,joinpath(kerneldir,postkernelfile))
-    #cp(postkernelfilesdir,joinpath(kerneldir,postkernelfilesdir))
+    
     #calculate our grid dimensions
     nposty = ceil(Int, (scafw - 2*postside + maxbeamlength)/(postside+maxbeamlength))
     npostx = ceil(Int, (scafl + maxbeamlength)/(postside+maxbeamlength))
@@ -204,6 +194,10 @@ function scaffoldjob(;calibratedfield,
     firstkernely = toplefty - ksy/2 + overlap
     kernelcenters = [(x,y) for x in firstkernelx:(ksx-overlap):(scafl/2), y in firstkernely:(-ksy+overlap):(-scafw/2 + postside + bly)]
 
+    #translate these kernel centers to `centerposition`
+    kernelcenters = map(kernelcenters) do kc
+        (kc[1] + centerposition[1], kc[2] + centerposition[2])
+    end
     #get the coordinates of each post relative to the top left of the kernel
     postoffsetstopleft = [(x,y) for x in range(start=overlap + blx + postside/2, step=blx+postside, length=nx),
 		              y in range(start=-overlap - bly - postside/2, step=-bly-postside, length = ny)]
@@ -218,8 +212,7 @@ function scaffoldjob(;calibratedfield,
 	leftkernel = kcx == kernelcenters[1,1][1]
 	rightkernel = kcx == kernelcenters[end,end][1]
 	bottomkernel = kcy == kernelcenters[end,end][2]
-	#give each unique type of kernel a different name, we will overwrite
-	#some of these as we go, but we will overwrite with identical contents
+	#give each unique type of kernel a different name
 	kernelname="kernel"
 	if leftkernel
 	    kernelname *= "left"	
@@ -232,14 +225,19 @@ function scaffoldjob(;calibratedfield,
 	if bottomkernel
 	    kernelname *= "bottom"
 	end
-	
+
+	#move to kernel position (put this in main script so we can
+	#reuse kernels
+	println(gwlbuf,"GlobalGoToX $kcx")
+	println(gwlbuf,"GlobalGoToY $kcy")
+	backlash(gwlbuf)
+        
 	kernelfile=joinpath(kerneldir,"$kernelname.gwl")
+        #include this file in our main job
+	println(gwlbuf,"include $kernelfile")
+        #don't regenerate a kernel we've already written
+        isfile(kernelfile) ? continue : nothing
 	open(kernelfile,"w") do kio
-	    #move to kernel position (put this in main script so we can
-	    #reuse kernels
-	    println(gwlbuf,"GlobalGoToX $kcx")
-	    println(gwlbuf,"GlobalGoToY $kcy")
-	    backlash(gwlbuf)
 	    #the post array is not centered in this frame, add the offset
 	    println(kio,"XOffset $((overlap+blx)/2)")
 	    println(kio,"YOffset $((-overlap-bly)/2)")
@@ -355,16 +353,67 @@ function scaffoldjob(;calibratedfield,
 	    savegwl(kio,hams...)
 	    #write the windows
 	    savegwl(kio,wins...)
-	    #reset the z offset for the next kernel
-	    println(kio,"ZOffset 0")
-	    #include this file in our main job
-	    println(gwlbuf,"include $kernelfile")
 	end
     end
+end
 
-    #write out the buffer
+
+"""
+```julia
+scaffoldjob(;kwargs...)
+scaffoldjob(configfile)
+```
+
+Generate the files required to print an array of scaffolds
+with geometry defined by the provided `kwargs` or config file.
+All arguments of `scaffold` are required, as well as:
+
+# Additional arguments
+- laserpower: laser power
+- scanspeed: scan speed for solid objects
+- outputfile: where to write the toplevel job script
+- arraycenter: where should the center of the scaffold array be in global coordinates, specified as a vector `[x,y]`
+- arraysize: size of the array, specified as a vector `[m,n]`
+- arraypitch: pitch of the array in x and y, specified as a vector `[m,n]`
+"""
+function scaffoldjob(;arraycenter,arraysize,arraypitch,laserpower,scanspeed,kerneldir,outputfile,scaffoldargs...)
+    #make a buffer to store our toplevel script
+    gwlbuf=IOBuffer()
+    #create our header
+    header = join([
+    "PowerScaling 1.0",
+    "var \$solidLaserPower = $laserpower",
+    "var \$solidScanSpeed = $scanspeed",
+    "var \$baseLaserPower = \$solidLaserPower",
+    "var \$baseScanSpeed = \$solidScanSpeed/2"
+    ],"\n")
+    #write the header to file
+    println(gwlbuf,header)
+    #create the kernel directory
+    mkdir(kerneldir)
+
+    #lay out our kernel centers, if arraysize is [1,1], just return [[0,0]]
+    kc_uncentered=(prod(arraysize) > 1) ? [[x,y] for x in range(0,step=arraypitch[1],length=arraysize[1]),
+                                               y in range(0,step=arraypitch[2],length=arraysize[2])] : [[0,0]]
+    (max_xpos,max_ypos) = map(1:2) do i
+        maximum(kc_uncentered) do kc
+            kc[i]
+        end
+    end
+
+    kc_centered = map(kc_uncentered) do (kcx,kcy)
+        [kcx - max_xpos/2, kcy - max_ypos/2]
+    end
+
+    #write all of the scaffolds to gwlbuf and generate kernel files
+    for kc in kc_centered
+        scaffold(gwlbuf,kc;kerneldir,scaffoldargs...)
+    end
+
+    #write out toplevel script
     seek(gwlbuf,0)
     write(outputfile,read(gwlbuf))
+    
 end
 
 function scaffoldjob(configfile)
