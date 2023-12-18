@@ -18,6 +18,7 @@ function writeconfig(filename="config.jl")
         :calibratedfield => 1750,
         :laserpower => 100,
         :scanspeed => 100000,
+        :focusoffset => 100,
         :interfacepos => 1,
         :scafl => 6000,
         :scafw => 4000,
@@ -375,8 +376,11 @@ All arguments of `scaffold` are required, as well as:
 - arraycenter: where should the center of the scaffold array be in global coordinates, specified as a vector `[x,y]`
 - arraysize: size of the array, specified as a vector `[m,n]`
 - arraypitch: pitch of the array in x and y, specified as a vector `[m,n]`
+- focusoffset: How far up should we move the objective in between scaffolds to ensure the autofocus works properly
 """
-function scaffoldjob(;arraycenter,arraysize,arraypitch,laserpower,scanspeed,kerneldir,outputfile,scaffoldargs...)
+function scaffoldjob(;arraycenter,arraysize,arraypitch,laserpower,
+                     scanspeed,kerneldir,outputfile,focusoffset,
+                     scaffoldargs...)
     #make a buffer to store our toplevel script
     gwlbuf=IOBuffer()
     #create our header
@@ -405,9 +409,17 @@ function scaffoldjob(;arraycenter,arraysize,arraypitch,laserpower,scanspeed,kern
         [kcx - max_xpos/2, kcy - max_ypos/2]
     end
 
+    #reorder kc_centered so we move in a snake pattern rather than lexical
+    kc_rows=map(1:size(kc_centered)[2]) do rowindex
+        this_row=kc_centered[:,rowindex]
+        isodd(rowindex) ? this_row : reverse(this_row)
+    end
+
     #write all of the scaffolds to gwlbuf and generate kernel files
-    for kc in kc_centered
+    for kc in vcat(kc_rows...)
         scaffold(gwlbuf,kc;kerneldir,scaffoldargs...)
+        #move the objective up a bit after writing each scaffold to help autofocus
+        println(gwlbuf,"AddZDrivePosition $focusoffset")
     end
 
     #write out toplevel script
