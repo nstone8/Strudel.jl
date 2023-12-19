@@ -18,6 +18,7 @@ function writeconfig(filename="config.jl")
         :calibratedfield => 1750,
         :laserpower => 100,
         :scanspeed => 100000,
+        :stagevelocity => 100,
         :focusoffset => 100,
         :interfacepos => 1,
         :scafl => 6000,
@@ -84,7 +85,8 @@ in microns.
 - dhammockhatch: hatching distance for mesh
 - postside: side length of (square) posts
 - postheight: post height
-- backlashamount distance to move during backlash correction 
+- backlashamount distance to move during backlash correction
+- focusoffset: How far up should we move the objective in between scaffolds to ensure the autofocus works properly
 """
 function scaffold(gwlbuf,centerposition=[0,0];calibratedfield,
                   interfacepos,
@@ -107,7 +109,8 @@ function scaffold(gwlbuf,centerposition=[0,0];calibratedfield,
                   bumperfile,
                   postkernelfile,
                   kerneldir,
-                  backlashamount)
+                  backlashamount,
+                  focusoffset)
     
     hammockz = (beambottomz + beamheight/2)
     chamfer = [-overlapangle -overlapangle
@@ -125,6 +128,8 @@ function scaffold(gwlbuf,centerposition=[0,0];calibratedfield,
         "GlobalGoToX $(centerposition[1])",
         "GlobalGoToY $(centerposition[2])",
         backlashstr,
+        #move the objective up a bit before writing each scaffold to help autofocus
+        "AddZDrivePosition $focusoffset",
         "FindInterfaceAt $interfacepos",
         "GlobalGoToX $(centerposition[1])",
         "GlobalGoToY $(centerposition[2]+bumperoffset)",
@@ -372,24 +377,25 @@ All arguments of `scaffold` are required, as well as:
 # Additional arguments
 - laserpower: laser power
 - scanspeed: scan speed for solid objects
+- stagevelocity: how fast should the stage move between kernels and scaffolds
 - outputfile: where to write the toplevel job script
 - arraycenter: where should the center of the scaffold array be in global coordinates, specified as a vector `[x,y]`
 - arraysize: size of the array, specified as a vector `[m,n]`
 - arraypitch: pitch of the array in x and y, specified as a vector `[m,n]`
-- focusoffset: How far up should we move the objective in between scaffolds to ensure the autofocus works properly
 """
 function scaffoldjob(;arraycenter,arraysize,arraypitch,laserpower,
-                     scanspeed,kerneldir,outputfile,focusoffset,
+                     scanspeed,kerneldir,outputfile,stagevelocity,
                      scaffoldargs...)
     #make a buffer to store our toplevel script
     gwlbuf=IOBuffer()
     #create our header
     header = join([
-    "PowerScaling 1.0",
-    "var \$solidLaserPower = $laserpower",
-    "var \$solidScanSpeed = $scanspeed",
-    "var \$baseLaserPower = \$solidLaserPower",
-    "var \$baseScanSpeed = \$solidScanSpeed/2"
+        "PowerScaling 1.0",
+        "var \$solidLaserPower = $laserpower",
+        "var \$solidScanSpeed = $scanspeed",
+        "var \$baseLaserPower = \$solidLaserPower",
+        "var \$baseScanSpeed = \$solidScanSpeed/2",
+        "StageVelocity $stagevelocity"    
     ],"\n")
     #write the header to file
     println(gwlbuf,header)
@@ -418,8 +424,6 @@ function scaffoldjob(;arraycenter,arraysize,arraypitch,laserpower,
     #write all of the scaffolds to gwlbuf and generate kernel files
     for kc in vcat(kc_rows...)
         scaffold(gwlbuf,kc;kerneldir,scaffoldargs...)
-        #move the objective up a bit after writing each scaffold to help autofocus
-        println(gwlbuf,"AddZDrivePosition $focusoffset")
     end
 
     #write out toplevel script
