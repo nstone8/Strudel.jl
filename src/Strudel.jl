@@ -52,6 +52,18 @@ function writeconfig(filename="config.jl")
 end
 
 """
+generate a `Vector` of the elements of a matrix with the elements reordered
+to reflect a snake-style traversal rather than lexical
+"""
+function snakepattern(mat::Matrix)
+    rows=map(1:size(mat)[2]) do rowindex
+        this_row=mat[:,rowindex]
+        isodd(rowindex) ? this_row : reverse(this_row)
+    end
+    vcat(rows...)
+end
+
+"""
 ```julia
 scaffold(buffer[,centerposition],kwargs...)
 ```
@@ -402,34 +414,33 @@ function scaffoldjob(;arraycenter,arraysize,arraypitch,laserpower,
     #create the kernel directory
     mkdir(kerneldir)
 
-    #lay out our kernel centers, if arraysize is [1,1], just return [[0,0]]
-    kc_uncentered=(prod(arraysize) > 1) ? [[x,y] for x in range(0,step=arraypitch[1],length=arraysize[1]),
+    #lay out our scaffold centers, if arraysize is [1,1], just return [[0,0]]
+    scaf_uncentered=(prod(arraysize) > 1) ? [[x,y] for x in range(0,step=arraypitch[1],length=arraysize[1]),
                                                y in range(0,step=arraypitch[2],length=arraysize[2])] : [[0,0]]
     (max_xpos,max_ypos) = map(1:2) do i
-        maximum(kc_uncentered) do kc
-            kc[i]
+        maximum(scaf_uncentered) do su
+            su[i]
         end
     end
 
-    kc_centered = map(kc_uncentered) do (kcx,kcy)
-        [kcx - max_xpos/2, kcy - max_ypos/2]
+    #center the kernel
+    scaf_centered = map(scaf_uncentered) do (sx,sy)
+        [sx - max_xpos/2, sy - max_ypos/2]
     end
 
-    #reorder kc_centered so we move in a snake pattern rather than lexical
-    kc_rows=map(1:size(kc_centered)[2]) do rowindex
-        this_row=kc_centered[:,rowindex]
-        isodd(rowindex) ? this_row : reverse(this_row)
+    #translate so the center of the array lies at `arraycenter`
+    scaf_translated = map(scaf_centered) do sc
+        sc + arraycenter
     end
-
+    
     #write all of the scaffolds to gwlbuf and generate kernel files
-    for kc in vcat(kc_rows...)
-        scaffold(gwlbuf,kc;kerneldir,scaffoldargs...)
+    for st in snakepattern(scaf_translated)
+        scaffold(gwlbuf,st;kerneldir,scaffoldargs...)
     end
 
     #write out toplevel script
     seek(gwlbuf,0)
     write(outputfile,read(gwlbuf))
-    
 end
 
 function scaffoldjob(configfile)
